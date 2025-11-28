@@ -2,40 +2,26 @@ import random
 import string
 import json
 
-from flask import Flask, send_file, redirect, url_for
+from flask import Flask, send_file, redirect
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
-from pilmoji import Pilmoji
 from random import randint
-from random_unicode_emoji import random_emoji
 
 f = open("emoji_pretty.json")
 emjdata = json.load(f)
 f.close()
 atlas = Image.open("sheet_twitter_64_indexed_256.png")
-skins = list(range(0x1F3FB, 0x1F3FF + 1))
 
 def rndimg():
-    emj = random_emoji()[0]
-    print(emj)
-    filtered=[]
-    skin_used=[]
-    for char in emj:
-        if ord(char) not in skins:
-            filtered += [char]
-        else:
-            skin_used += [char]
-    key = "-".join([f"{ord(char):04x}".upper() for char in filtered])
-    found = [emj for emj in emjdata if emj["unified"] == key or emj["non_qualified"] == key]
-    print([emj['short_name'] for emj in found])
-    if not skin_used:
-        sheet_x = found[0]['sheet_x']
-        sheet_y = found[0]['sheet_y']
+    emj = emjdata[randint(0, len(emjdata))]
+    print(emj['short_name'])
+    if 'skin_variations' not in emj:
+        sheet_x = emj['sheet_x']
+        sheet_y = emj['sheet_y']
     else:
-        skin_var = "-".join([f"{ord(char):04x}".upper() for char in skin_used])
-        skin_var = found[0]['skin_variations'][skin_var]
-        sheet_x = skin_var['sheet_x']
-        sheet_y = skin_var['sheet_y']
+        emj = emj['skin_variations'][random.choice(list(emj['skin_variations'].keys()))]
+        sheet_x = emj['sheet_x']
+        sheet_y = emj['sheet_y']
     
     sheet_size = 64
     x = (sheet_x * (sheet_size + 2)) + 1;
