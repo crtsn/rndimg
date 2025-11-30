@@ -1,6 +1,7 @@
 import random
 import string
 import json
+import PIL
 
 from flask import Flask, send_file, redirect
 from io import BytesIO
@@ -10,7 +11,9 @@ from random import randint
 f = open("emoji_pretty.json")
 emjdata = json.load(f)
 f.close()
-atlas = Image.open("sheet_twitter_64_indexed_256.png")
+
+PIL.Image.MAX_IMAGE_PIXELS = 255872016
+atlas = Image.open("sheet_twitter_256_indexed_256.png")
 
 def rndimg():
     emj = emjdata[randint(0, len(emjdata))]
@@ -23,7 +26,7 @@ def rndimg():
         sheet_x = emj['sheet_x']
         sheet_y = emj['sheet_y']
     
-    sheet_size = 64
+    sheet_size = 256
     x = (sheet_x * (sheet_size + 2)) + 1;
     y = (sheet_y * (sheet_size + 2)) + 1;
     
@@ -43,19 +46,27 @@ def serve_img(path):
     if path == '':
         new_path='/' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=16))
         return redirect(new_path)
+
+    img_side=800
+    emoji_side=256
     r = randint(0, 255)
     g = randint(0, 255)
     b = randint(0, 255)
-    img = Image.new('RGB', (800, 800), color=(r, g, b))
+    img = Image.new('RGB', (img_side, img_side), color=(r, g, b))
 
     draw = ImageDraw.Draw(img)
     fnt = ImageFont.truetype("FreeMono.ttf", 40)
-    draw.text((10, 60), "World!", font=fnt, fill=(255, 255, 255))
 
     emoji_img = rndimg()
-    img.paste(emoji_img, (0, 0), emoji_img)
+    txt = "Hello, World!"
+    
+    center = int(img_side / 2)
+    emj_center = int(emoji_side / 2)
+    text_box = draw.textbbox((center, center), txt, font=fnt)
+    text_center = int((text_box[2] - text_box[0]) / 2)
+    img.paste(emoji_img, (center - emj_center, center - emj_center), emoji_img)
+    draw.text((center - text_center, center + emj_center), txt, font=fnt, fill=(0, 0, 0))
 
-    img.show()
     return serve_pil_image(img)
 
 @app.after_request
