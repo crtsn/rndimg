@@ -2,8 +2,9 @@ import random
 import string
 import json
 import PIL
+import hashlib
 
-from flask import Flask, send_file, redirect
+from flask import Flask, send_file, redirect, request
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont
 from random import randint
@@ -60,9 +61,19 @@ def serve_pil_image(pil_img):
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve_img(path):
-    if path == '':
+    path_str = path
+    request_str = request.query_string.decode('utf-8')
+    if request_str != '':
+        path_str += '?'
+        path_str += request_str
+    if path_str == '':
         new_path='/' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=16))
         return redirect(new_path)
+
+    print(path_str[0:8])
+    seed = int(hashlib.sha1(path_str[0:8].encode("utf-8")).hexdigest(), 16) % (10 ** 8)
+    print(seed)
+    random.seed(seed)
 
     img_side=800
     r = randint(0, 255)
