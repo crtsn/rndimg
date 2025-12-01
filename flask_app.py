@@ -9,14 +9,19 @@ from PIL import Image, ImageDraw, ImageFont
 from random import randint
 
 f = open("emoji_pretty.json")
-emjdata = json.load(f)
+emoji_data = json.load(f)
+f.close()
+
+f = open("emotes.json")
+emote_data = json.load(f)
 f.close()
 
 PIL.Image.MAX_IMAGE_PIXELS = 255872016
-atlas = Image.open("sheet_twitter_256_indexed_256.png")
+emoji_atlas = Image.open("sheet_twitter_256_indexed_256.png")
+emote_atlas = Image.open("emotes.png")
 
-def rndimg():
-    emj = emjdata[randint(0, len(emjdata))]
+def rnd_emoji():
+    emj = emoji_data[randint(0, len(emoji_data))]
     print(emj['short_name'])
     if 'skin_variations' not in emj:
         sheet_x = emj['sheet_x']
@@ -30,7 +35,19 @@ def rndimg():
     x = (sheet_x * (sheet_size + 2)) + 1;
     y = (sheet_y * (sheet_size + 2)) + 1;
     
-    return atlas.crop((x, y, x + sheet_size, y + sheet_size)).convert("RGBA")
+    return emoji_atlas.crop((x, y, x + sheet_size, y + sheet_size)).convert("RGBA")
+
+def rnd_emote():
+    emt = emote_data[randint(0, len(emote_data))]
+    print(emt['name'])
+    sheet_x = emt['sheet_x']
+    sheet_y = emt['sheet_y']
+    
+    sheet_size = 128
+    x = sheet_x * sheet_size
+    y = sheet_y * sheet_size
+    
+    return emote_atlas.crop((x, y, x + sheet_size, y + sheet_size)).convert("RGBA")
 
 app = Flask(__name__)
 
@@ -48,7 +65,6 @@ def serve_img(path):
         return redirect(new_path)
 
     img_side=800
-    emoji_side=256
     r = randint(0, 255)
     g = randint(0, 255)
     b = randint(0, 255)
@@ -57,7 +73,12 @@ def serve_img(path):
     draw = ImageDraw.Draw(img)
     fnt = ImageFont.truetype("FreeMono.ttf", 40)
 
-    emoji_img = rndimg()
+    if randint(0,1) == 1:
+        emoji_img = rnd_emoji()
+        emoji_side=256
+    else:
+        emoji_img = rnd_emote()
+        emoji_side=128
     txt = "Hello, World!"
     
     center = int(img_side / 2)
