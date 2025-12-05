@@ -11,6 +11,8 @@ from random import randint
 from enum import Enum
 
 words = ["HELLO", "Hello", "Young", "Stranger", "ABSOLUTE", "CODING", "TSODING", "DEEZ", "NUTS", "URMOM"]
+img_side=800
+obj_limit = 15
 
 f = open("emoji_pretty.json")
 emoji_data = json.load(f)
@@ -24,15 +26,13 @@ PIL.Image.MAX_IMAGE_PIXELS = 255872016
 emoji_atlas = Image.open("sheet_twitter_256_indexed_256.png")
 emote_atlas = Image.open("emotes.png")
 
-img_side=800
-
 class Object(Enum):
     image = 1
     text = 2
     char = 3
-    # ellipse = 4
-    # rect = 5
-    # line = 6
+    ellipse = 4
+    rect = 5
+    line = 6
 
 def get_emoji(num: int):
     emj = emoji_data[num]
@@ -94,8 +94,15 @@ def fill_object(obj: dict):
         obj["num"] = randint(0, len(words) - 1)
         obj["size"] = randint(40, 72)
     elif obj["objtype"] == Object.char:
-        obj["num"] = randint(0, 255)
+        obj["num"] = randint(33, 126)
         obj["size"] = randint(40, 72)
+    elif (obj["objtype"] == Object.ellipse or
+          obj["objtype"] == Object.rect):
+        obj["w"] = randint(200, 400)
+        obj["h"] = randint(200, 400)
+    elif obj["objtype"] == Object.line:
+        obj["x2"] = randint(0, img_side)
+        obj["y2"] = randint(0, img_side)
 
 def randpos(obj: dict):
     xpos = randint(img_side // 8, 6 * img_side // 8)
@@ -131,6 +138,14 @@ def draw_object(obj: dict, img: Image, draw: ImageDraw.Draw):
     elif obj["objtype"] == Object.char:
         fnt = ImageFont.truetype("FreeMono.ttf", obj["size"])
         draw.text((obj["xpos"], obj["ypos"]), chr(obj["num"]), font=fnt, fill=(0, 0, 0))
+    elif obj["objtype"] == Object.ellipse:
+        draw.ellipse([(obj["xpos"], obj["ypos"]), (obj["xpos"] + obj["w"], obj["ypos"] + obj["h"])], fill=(randint(0, 200), randint(0, 200), randint(0, 200)), outline=None)
+    elif obj["objtype"] == Object.line:
+        draw.line([(obj["xpos"], obj["ypos"]), (obj["x2"], obj["y2"])], fill=(randint(0, 200), randint(0, 200), randint(0, 200)), width = randint(5, 10))
+    elif obj["objtype"] == Object.rect:
+        draw.rectangle([(obj["xpos"], obj["ypos"]), (obj["xpos"] + obj["w"], obj["ypos"] + obj["h"])], fill=(randint(0, 200), randint(0, 200), randint(0, 200)), outline=None)
+    else:
+        assert 0
 
 def executor(cmd: str) -> Image:
 
@@ -145,36 +160,23 @@ def executor(cmd: str) -> Image:
 
     img = Image.new('RGB', (img_side, img_side), color=(r, g, b))
     draw = ImageDraw.Draw(img)
-    # if randint(0,1) == 1:
-    #     emoji_num = randint(0, len(emoji_data) - 1)
-    #     emoji_img = paste_emoji(emoji_num)
-    #     emoji_side=256
-    # else:
-    #     emote_num = randint(0, len(emote_data) - 1)
-    #     emoji_img = paste_emote(emote_num)
-    #     emoji_side=128
-    # txt = "Hello, World!"
-    # 
-    # center = int(img_side / 2)
-    # emj_center = int(emoji_side / 2)
-    # text_box = draw.textbbox((center, center), txt, font=fnt)
-    # text_center = int((text_box[2] - text_box[0]) / 2)
-    # img.paste(emoji_img, (center - emj_center, center - emj_center), emoji_img)
-    # draw.text((center - text_center, center + emj_center), txt, font=fnt, fill=(0, 0, 0))
 
-    objects = [new_object()]
+    objects = []
+    for _ in range(0, randint(1, 5)):
+        objects += [new_object()]
     print(objects)
     cur_object = 0
     b = bytes(cmd, 'utf-8')
     for byte in b:
+        add = False
         char = chr(byte)
         match char:
             case 'A':
                 instr = 'ADD'
-                objects += [new_object()]
+                add = True
             case 'B':
                 instr = 'BRING'
-                objects += [new_object()]
+                add = True
             case 'C':
                 instr = 'COLOR'
             case 'D':
@@ -184,7 +186,7 @@ def executor(cmd: str) -> Image:
                 objects += [doubled]
             case 'E':
                 instr = 'ESTABLISH'
-                objects += [new_object()]
+                add = True
             case 'F':
                 instr = 'FORWARD'
             case 'G':
@@ -193,7 +195,7 @@ def executor(cmd: str) -> Image:
                 instr = 'HIDE'
             case 'I':
                 instr = 'INSERT'
-                objects += [new_object()]
+                add = True
             case 'J':
                 instr = 'JUMP'
             case 'K':
@@ -207,7 +209,7 @@ def executor(cmd: str) -> Image:
                 cur_object = (cur_object + 1) % len(objects)
             case 'O':
                 instr = 'OUTPUT'
-                objects += [new_object()]
+                add = True
             case 'P':
                 instr = 'PUT'
             case 'Q':
@@ -221,7 +223,7 @@ def executor(cmd: str) -> Image:
                 transform_object(objects[cur_object])
             case 'U':
                 instr = 'UNVEIL'
-                objects += [new_object()]
+                add = True
             case 'V':
                 instr = 'VIEW'
             case 'W':
@@ -230,16 +232,18 @@ def executor(cmd: str) -> Image:
                 instr = 'XEROX'
             case 'Y':
                 instr = 'YIELD'
-                objects += [new_object()]
+                add = True
             case 'Z':
                 instr = 'ZOOM'
             case '_':
                 instr = '_MORE'
-                objects += [new_object()]
+                add = True
             case _:
                 instr = 'UNKNOWN'
-        print(f"{byte}:\t'{char}'\t{instr}")
-        print(objects)
+        # print(f"{byte}:\t'{char}'\t{instr}")
+        # print(objects)
+        if add and len(objects) < obj_limit:
+            objects += [new_object()]
     for obj in objects:
         draw_object(obj, img, draw)
     return img
