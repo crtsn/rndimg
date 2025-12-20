@@ -14,6 +14,7 @@ Add variants of paintings to draw:
     - 2-6 characters with optional text bubbles
         - 4 images with same characters, so it will be like comics
         - various sizes
+        - objects could be flipped
         - objects could be placed:
             - grid, same depth
             - grid, perspective
@@ -51,3 +52,5 @@ url controls:
     - it could iterate over characters
     - it could change a style or start a new picture on top? also could be a mess
     - it could draw geometric shapes, but not that big, or big but semitransparent
+
+Let's start with 2-5 characters and groups
