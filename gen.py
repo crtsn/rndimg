@@ -17,7 +17,7 @@ words = ["HELLO", "Hello", "Young", "Stranger", "ABSOLUTE", "CODING", "TSODING",
 img_side=800
 obj_limit = 15
 debug=True
-debug=False
+# debug=False
 
 f = open("emoji_pretty.json")
 emoji_data = json.load(f)
@@ -28,7 +28,7 @@ emote_data = json.load(f)
 f.close()
 
 PIL.Image.MAX_IMAGE_PIXELS = 255872016
-emoji_atlas = Image.open("sheet_twitter_256_indexed_256.png")
+emoji_atlas = Image.open("sheet_twitter_256_indexed_256.png").convert("RGBA")
 emote_atlas = Image.open("emotes.png")
 
 @dataclass
@@ -92,11 +92,10 @@ class Picture(Object):
     def draw(self, img: Image, d: ImageDraw):
         match self.atlas:
             case 0:
-                emoji_side = 256
                 obj_img = get_emoji(self.num)
             case 1:
-                emoji_side = 128
                 obj_img = get_emote(self.num)
+        obj_img = obj_img.crop(obj_img.getbbox())
         obj_img = obj_img.resize((self.w, self.h))
         img.paste(obj_img, (self.x, self.y), obj_img)
 
@@ -172,9 +171,11 @@ class Line(Object):
 
 class Actor(Object):
     def __init__(self, x=0, y=0, height=10):
-        self.el = Ellipse()
+        self.el = Ellipse(fill=not debug)
         self.el.w = randint(100, 200)
         self.el.h = self.el.w // 2
+        if not debug:
+            self.el.color = (64, 64, 64)
         self.center = Ellipse(fill=True)
         self.h = height
         self.height = Line()
@@ -221,8 +222,8 @@ class Actor(Object):
         return rect
 
     def draw(self, img: Image, d: ImageDraw):
+        self.el.draw(img, d)
         if debug:
-            self.el.draw(img, d)
             self.cross_x.draw(img, d)
             self.cross_y.draw(img, d)
         self.img.draw(img, d)
@@ -232,110 +233,27 @@ class Actor(Object):
 
 def get_emoji(num: int):
     emj = emoji_data[num]
-    if 'skin_variations' not in emj:
-        sheet_x = emj['sheet_x']
-        sheet_y = emj['sheet_y']
-    else:
-        emj = emj['skin_variations'][random.choice(list(emj['skin_variations'].keys()))]
-        sheet_x = emj['sheet_x']
-        sheet_y = emj['sheet_y']
+    sheet_x = emj['sheet_x']
+    sheet_y = emj['sheet_y']
+    # print(emj['short_name'])
 
     sheet_size = 256
     x = (sheet_x * (sheet_size + 2)) + 1;
     y = (sheet_y * (sheet_size + 2)) + 1;
 
-    return emoji_atlas.crop((x, y, x + sheet_size, y + sheet_size)).convert("RGBA")
+    return emoji_atlas.crop((x, y, x + sheet_size, y + sheet_size))
 
 def get_emote(num: int):
     emt = emote_data[num]
     sheet_x = emt['sheet_x']
     sheet_y = emt['sheet_y']
+    # print(emt['name'])
 
     sheet_size = 128
     x = sheet_x * sheet_size
     y = sheet_y * sheet_size
 
-    return emote_atlas.crop((x, y, x + sheet_size, y + sheet_size)).convert("RGBA")
-
-def fill_object(obj: dict, **kwargs):
-    if obj["objtype"] == Object.image:
-        atlas = randint(0,1)
-        obj["atlas"] = atlas
-        match atlas:
-            case 0:
-                emoji_side = 256
-                obj_num = randint(0, len(emoji_data) - 1)
-                emjw = randint(emoji_side // 4, emoji_side)
-                emjh = randint(emoji_side // 4, emoji_side)
-            case 1:
-                emoji_side = 128
-                obj_num = randint(0, len(emote_data) - 1)
-                emjw = randint(emoji_side // 2, emoji_side * 2)
-                emjh = randint(emoji_side // 2, emoji_side * 2)
-
-        obj["w"] = emjw
-        obj["h"] = emjh
-        obj["num"] = obj_num
-    elif obj["objtype"] == Object.text:
-        obj["num"] = randint(0, len(words) - 1)
-        obj["size"] = randint(40, 72)
-    elif obj["objtype"] == Object.char:
-        obj["num"] = randint(33, 126)
-        obj["size"] = randint(40, 72)
-    elif (obj["objtype"] == Object.ellipse or
-          obj["objtype"] == Object.rect):
-        obj["w"] = randint(200, 400)
-        obj["h"] = randint(200, 400)
-        obj["fill"] = kwargs.get("fill", True)
-    elif obj["objtype"] == Object.line:
-        obj["x2"] = randint(0, img_side)
-        obj["y2"] = randint(0, img_side)
-
-def randpos(obj: dict):
-    xpos = randint(img_side // 8, 6 * img_side // 8)
-    ypos = randint(img_side // 8, 6 * img_side // 8)
-    obj["xpos"] = xpos
-    obj["ypos"] = ypos
-
-def new_object(objtype: Object, **kwargs) -> dict:
-    obj = {"objtype": objtype, "xpos": 0, "ypos": 0}
-    fill_object(obj, **kwargs)
-    return obj
-
-def transform_object(obj: dict):
-    obj["objtype"] = Object((obj["objtype"].value + 1) % len(Object) + 1)
-    fill_object(obj)
-
-def draw_object(obj: dict, img: Image, draw: ImageDraw.Draw):
-    if obj["objtype"] == Object.image:
-        match obj["atlas"]:
-            case 0:
-                emoji_side = 256
-                obj_img = get_emoji(obj["num"])
-            case 1:
-                emoji_side = 128
-                obj_img = get_emote(obj["num"])
-        obj_img = obj_img.resize((obj["w"], obj["h"]))
-        img.paste(obj_img, (obj["xpos"], obj["ypos"]), obj_img)
-    elif obj["objtype"] == Object.text:
-        fnt = ImageFont.truetype("FreeMono.ttf", obj["size"])
-        draw.text((obj["xpos"], obj["ypos"]), words[obj["num"]], font=fnt, fill=(0, 0, 0))
-    elif obj["objtype"] == Object.char:
-        fnt = ImageFont.truetype("FreeMono.ttf", obj["size"])
-        draw.text((obj["xpos"], obj["ypos"]), chr(obj["num"]), font=fnt, fill=(0, 0, 0))
-    elif obj["objtype"] == Object.ellipse:
-        params = {}
-        if obj["fill"]:
-            params.update({"fill": (randint(0, 200), randint(0, 200), randint(0, 200)), "outline": None})
-        else:
-            params.update({"outline": (randint(0, 200), randint(0, 200), randint(0, 200)), "fill": None})
-        draw.ellipse([(obj["xpos"], obj["ypos"]), (obj["xpos"] + obj["w"], obj["ypos"] + obj["h"])], **params)
-    elif obj["objtype"] == Object.line:
-        draw.line([(obj["xpos"], obj["ypos"]), (obj["x2"], obj["y2"])], fill=(randint(0, 200), randint(0, 200), randint(0, 200)), width = randint(5, 10))
-    elif obj["objtype"] == Object.rect:
-        draw.rectangle([(obj["xpos"], obj["ypos"]), (obj["xpos"] + obj["w"], obj["ypos"] + obj["h"])], fill=(randint(0, 200), randint(0, 200), randint(0, 200)), outline=None)
-    else:
-        assert 0
+    return emote_atlas.crop((x, y, x + sheet_size, y + sheet_size))
 
 def randcolor():
     r = randint(50, 200)
@@ -347,15 +265,35 @@ def executor(cmd: str) -> Image:
     seed = int(hashlib.sha1(cmd[0:8].encode("utf-8")).hexdigest(), 16) % (10 ** 8)
     random.seed(seed)
 
-    horizon_high=50
-    horizon = randint(horizon_high, img_side)
-    layers = randint(1, 7)
+    nlayers = randint(1, 5)
     groups = []
-    for layer in range(0, layers):
-        layer_y = horizon + ((img_side - horizon) // layers) * layer
+    first = randint(img_side // 2, img_side - 50)
+    last = randint(50, img_side // 2)
+    layers = [last]
+    diff = first - last
+    left = diff
+    print(last, first)
+    for i in range(1, nlayers):
+        layer_min=int(diff/100*10)
+        layer_max=int(diff/100*(100/(nlayers-1)))
+        layer_y=randint(layer_min, layer_max)
+        if layer_y > left:
+            layer_y = left
+        print(i, ":", layer_y)
+        layers += [layers[i-1]+layer_y]
+        print(layers)
+        left -= layer_y
+    if nlayers >= 2:
+        drain = randint(0, nlayers-2)
+        for i in range(drain, nlayers):
+            layers[i] += left
+    # sys.exit(1)
+    print(layers)
+    for layer in range(0, nlayers):
+        print(layer)
+        layer_y = layers[layer]
         x=randint(0, img_side)
-        height=(layer_y-horizon_high)/(img_side)
-        height *= 300
+        height = 300
         height=int(height)
         groups += [[Actor(x=x, y=layer_y, height=height)]]
     img_rect = Rect(0, 0, img_side, img_side)
@@ -370,11 +308,11 @@ def executor(cmd: str) -> Image:
 
     img = Image.new('RGB', (img_w, img_h), color=bgcolor)
     d = ImageDraw.Draw(img)
-    d.rectangle([(0, 0), (img_w, horizon)], fill=randcolor(), outline=None)
+    d.rectangle([(0, 0), (img_w, -img_rect.y+layers[0])], fill=randcolor(), outline=None)
     if debug:
-        for layer in range(0, layers):
-            layer_y = horizon + ((img_side - horizon) // layers) * layer
-            d.line([(-img_rect.x, -img_rect.y+layer_y), (-img_rect.x+img_side, -img_rect.y+layer_y)], fill=(randint(0, 200), randint(0, 200), randint(0, 200)), width = 1)
+        for layer in range(0, nlayers):
+            layer_y = layers[layer]
+            d.line([(-img_rect.x, -img_rect.y+layer_y), (-img_rect.x+img_side, -img_rect.y+layer_y)], fill=(0, 0, 0), width = 1)
 
     for group in groups:
         for actor in group:
