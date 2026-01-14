@@ -17,7 +17,7 @@ words = ["HELLO", "Hello", "Young", "Stranger", "ABSOLUTE", "CODING", "TSODING",
 img_side=800
 obj_limit = 15
 debug=True
-# debug=False
+debug=False
 
 f = open("emoji_pretty.json")
 emoji_data = json.load(f)
@@ -37,6 +37,31 @@ class Rect:
     y: int
     w: int
     h: int
+
+class Atlas:
+    def __init__(self, atlas, data, pic_side, padding=1):
+        self.atlas = atlas
+        self.data = data
+        self.pic_side = pic_side
+        self.padding = padding
+
+    def get_pic(self, num: int):
+        pic = self.data[num]
+        sheet_x = pic['sheet_x']
+        sheet_y = pic['sheet_y']
+        # print(pic['name'])
+
+        x = (sheet_x * (self.pic_side + 2 * self.padding)) + self.padding
+        y = (sheet_y * (self.pic_side + 2 * self.padding)) + self.padding
+        pic = self.atlas.crop((x, y, x + self.pic_side, y + self.pic_side))
+        pic = pic.crop(pic.getbbox())
+        return pic
+
+    def rnd_pic(self):
+        num = randint(0, len(self.data) - 1)
+        return self.get_pic(num)
+
+atlases = [Atlas(emoji_atlas, emoji_data, 256, 1), Atlas(emote_atlas, emote_data, 128, 0)]
 
 class Object(ABC):
     @abstractmethod
@@ -63,40 +88,24 @@ def rect_union(big: Rect, rect: Rect):
         big.h = rect.h 
 
 class Picture(Object):
-    def __init__(self, x=0, y=0, w=10, h=10):
+    def __init__(self, x=0, y=0):
         self.x = x
         self.y = y
-        self.w = w
-        self.h = h
-        self.atlas = randint(0,1)
-        match self.atlas:
-            case 0:
-                emoji_side = 256
-                obj_num = randint(0, len(emoji_data) - 1)
-                emjw = randint(emoji_side // 4, emoji_side)
-                emjh = randint(emoji_side // 4, emoji_side)
-            case 1:
-                emoji_side = 128
-                obj_num = randint(0, len(emote_data) - 1)
-                emjw = randint(emoji_side // 2, emoji_side * 2)
-                emjh = randint(emoji_side // 2, emoji_side * 2)
-
-        self.w = emjw
-        self.h = emjh
-        self.num = obj_num
+        self.atlas = atlases[randint(0,1)]
+        self.img = self.atlas.rnd_pic()
+        ratio = self.img.width / self.img.height
+        new_h = int((self.img.height / self.atlas.pic_side) * 200)
+        new_w = int(new_h * ratio)
+        self.img = self.img.resize((new_w, new_h))
+        self.w = self.img.width
+        self.h = self.img.height
 
     def shift(self, x: int, y: int):
         self.x += x
         self.y += y
 
     def draw(self, img: Image, d: ImageDraw):
-        match self.atlas:
-            case 0:
-                obj_img = get_emoji(self.num)
-            case 1:
-                obj_img = get_emote(self.num)
-        obj_img = obj_img.crop(obj_img.getbbox())
-        obj_img = obj_img.resize((self.w, self.h))
+        obj_img = self.img.resize((self.w, self.h))
         img.paste(obj_img, (self.x, self.y), obj_img)
 
     @property
@@ -170,22 +179,22 @@ class Line(Object):
                     max(self.y2, self.y))
 
 class Actor(Object):
-    def __init__(self, x=0, y=0, height=10):
-        self.el = Ellipse(fill=not debug)
-        self.el.w = randint(100, 200)
-        self.el.h = self.el.w // 2
-        if not debug:
-            self.el.color = (64, 64, 64)
+    def __init__(self, x=0, y=0, stretch=1.0):
+        self.img = Picture()
+        self.el = Ellipse()
         self.center = Ellipse(fill=True)
-        self.h = height
         self.height = Line()
         self.cross_x = Line()
         self.cross_y = Line()
+        ratio = self.img.w / self.img.h
+        print(stretch)
+        self.h = int(self.img.h * stretch)
         self.x = 0
         self.y = 0
-        self.img = Picture()
         self.img.h = self.h
-        self.img.w = self.el.w
+        self.img.w = int(self.h * ratio)
+        self.el.w = self.img.w
+        self.el.h = self.img.h // 2
         self.shift(x, y)
     
     def shift(self, x: int, y: int):
@@ -222,38 +231,14 @@ class Actor(Object):
         return rect
 
     def draw(self, img: Image, d: ImageDraw):
-        self.el.draw(img, d)
         if debug:
+            self.el.draw(img, d)
             self.cross_x.draw(img, d)
             self.cross_y.draw(img, d)
         self.img.draw(img, d)
         if debug:
             self.height.draw(img, d)
             self.center.draw(img, d)
-
-def get_emoji(num: int):
-    emj = emoji_data[num]
-    sheet_x = emj['sheet_x']
-    sheet_y = emj['sheet_y']
-    # print(emj['short_name'])
-
-    sheet_size = 256
-    x = (sheet_x * (sheet_size + 2)) + 1;
-    y = (sheet_y * (sheet_size + 2)) + 1;
-
-    return emoji_atlas.crop((x, y, x + sheet_size, y + sheet_size))
-
-def get_emote(num: int):
-    emt = emote_data[num]
-    sheet_x = emt['sheet_x']
-    sheet_y = emt['sheet_y']
-    # print(emt['name'])
-
-    sheet_size = 128
-    x = sheet_x * sheet_size
-    y = sheet_y * sheet_size
-
-    return emote_atlas.crop((x, y, x + sheet_size, y + sheet_size))
 
 def randcolor():
     r = randint(50, 200)
@@ -267,8 +252,8 @@ def executor(cmd: str) -> Image:
 
     nlayers = randint(1, 5)
     groups = []
-    first = randint(img_side // 2, img_side - 50)
-    last = randint(50, img_side // 2)
+    first = randint(img_side // 2 + 50, img_side - 50)
+    last = randint(50, img_side // 2 - 50)
     layers = [last]
     diff = first - last
     left = diff
@@ -292,10 +277,14 @@ def executor(cmd: str) -> Image:
     for layer in range(0, nlayers):
         print(layer)
         layer_y = layers[layer]
-        x=randint(0, img_side)
-        height = 300
-        height=int(height)
-        groups += [[Actor(x=x, y=layer_y, height=height)]]
+        stretch=min(1.0-(first-layer_y)/diff+0.3, 1.0)
+        print(stretch)
+        nactors = randint(1, 4)
+        group = []
+        for _ in range(0,nactors):
+            x=randint(0, img_side)
+            group += [Actor(x=x, y=layer_y, stretch=stretch)]
+        groups += [group]
     img_rect = Rect(0, 0, img_side, img_side)
     for group in groups:
         for actor in group:
