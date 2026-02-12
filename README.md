@@ -9,29 +9,29 @@ https://github.com/iamcal/emoji-data/tree/2771d0b1b3af25c069086e68e38f901c3dda8b
 true random is not that funny, so:
 
 Add variants of paintings to draw:
-    - with one big object in the center
-        - optional text here and in other variants
-    - 2-6 characters with optional text bubbles
-        - 4 images with same characters, so it will be like comics
-        - various sizes
-        - objects could be flipped
-        - objects could be placed:
-            - grid, same depth
-            - grid, perspective
-            - circle, same depth
-            - circle, perspective
-            - one object in center, others in grid or circle
-        - space between objects could also be  random or with patterns:
-            - near
-            - far
-    - 2-4 crowds of characters with different depths
-    - average or border color used as main color of something like sky, ground, sea, so it looks like some kind of landscape
-        - could be background for other styles
-    - pop art like; with different color filters for each square
-    - mix multiple images on borders to make some kind of mattpainting(?)
-    - place two characters really next to each other so it looks that they are in love
-    - markov chain teached on pixel rows or columns of emotes, so it could output glitched images
-    - something like plant, tree, creature, but this could look either too similar, either too awful
+- with one big object in the center
+    - optional text here and in other variants
+- 2-6 characters with optional text bubbles
+    - 4 images with same characters, so it will be like comics
+    - various sizes
+    - objects could be flipped
+    - objects could be placed:
+        - grid, same depth
+        - grid, perspective
+        - circle, same depth
+        - circle, perspective
+        - one object in center, others in grid or circle
+    - space between objects could also be  random or with patterns:
+        - near
+        - far
+- 2-4 crowds of characters with different depths
+- average or border color used as main color of something like sky, ground, sea, so it looks like some kind of landscape
+    - could be background for other styles
+- pop art like; with different color filters for each square
+- mix multiple images on borders to make some kind of mattpainting(?)
+- place two characters really next to each other so it looks that they are in love
+- markov chain teached on pixel rows or columns of emotes, so it could output glitched images
+- something like plant, tree, creature, but this could look either too similar, either too awful
 
 should I process emotes? Probably no, it could be funnier because they are rectangular, also processing every emoji would be hard, i could transform them in some styles, but just using cropping without content assumptions
 
@@ -44,13 +44,13 @@ generating text with carrot? if it will be not that slow with sqlite probably ye
 add carrot to every painting as a signture
 
 url controls:
-    - seed
-    - number of groups
-    - number of objects
-    - filters, but it could be probably be a mess
-    - it could move groups probably
-    - it could iterate over characters
-    - it could change a style or start a new picture on top? also could be a mess
-    - it could draw geometric shapes, but not that big, or big but semitransparent
+- seed
+- number of groups
+- number of objects
+- filters, but it could be probably be a mess
+- it could move groups probably
+- it could iterate over characters
+- it could change a style or start a new picture on top? also could be a mess
+- it could draw geometric shapes, but not that big, or big but semitransparent
 
 Let's start with 2-5 characters and groups
