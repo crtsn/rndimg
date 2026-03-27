@@ -187,7 +187,6 @@ class Actor(Object):
         self.cross_x = Line()
         self.cross_y = Line()
         ratio = self.img.w / self.img.h
-        print(stretch)
         self.h = int(self.img.h * stretch)
         self.x = 0
         self.y = 0
@@ -257,28 +256,22 @@ def executor(cmd: str) -> Image:
     layers = [last]
     diff = first - last
     left = diff
-    print(last, first)
     for i in range(1, nlayers):
         layer_min=int(diff/100*10)
         layer_max=int(diff/100*(100/(nlayers-1)))
         layer_y=randint(layer_min, layer_max)
         if layer_y > left:
             layer_y = left
-        print(i, ":", layer_y)
         layers += [layers[i-1]+layer_y]
-        print(layers)
         left -= layer_y
     if nlayers >= 2:
         drain = randint(0, nlayers-2)
         for i in range(drain, nlayers):
             layers[i] += left
     # sys.exit(1)
-    print(layers)
     for layer in range(0, nlayers):
-        print(layer)
         layer_y = layers[layer]
         stretch=min(1.0-(first-layer_y)/diff+0.3, 1.0)
-        print(stretch)
         nactors = randint(1, 4)
         group = []
         for _ in range(0,nactors):
