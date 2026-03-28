@@ -23,6 +23,9 @@ f = open("emoji_pretty.json")
 emoji_data = json.load(f)
 f.close()
 
+sparkles_num = [i for i, v in enumerate(emoji_data) if v["name"] == 'sparkles'][0]
+carrot_num = [i for i, v in enumerate(emoji_data) if v["name"] == 'carrot'][0]
+
 f = open("emotes.json")
 emote_data = json.load(f)
 f.close()
@@ -88,11 +91,14 @@ def rect_union(big: Rect, rect: Rect):
         big.h = rect.h 
 
 class Picture(Object):
-    def __init__(self, x=0, y=0):
+    def __init__(self, x=0, y=0, atlas_num=0, img_num=None):
         self.x = x
         self.y = y
-        self.atlas = atlases[randint(0,1)]
-        self.img = self.atlas.rnd_pic()
+        self.atlas = atlases[atlas_num]
+        if img_num == None:
+            self.img = self.atlas.rnd_pic()
+        else:
+            self.img = self.atlas.get_pic(img_num)
         ratio = self.img.width / self.img.height
         new_h = int((self.img.height / self.atlas.pic_side) * 200)
         new_w = int(new_h * ratio)
@@ -180,7 +186,7 @@ class Line(Object):
 
 class Actor(Object):
     def __init__(self, x=0, y=0, stretch=1.0):
-        self.img = Picture()
+        self.img = Picture(atlas_num=randint(0,1))
         self.el = Ellipse()
         self.center = Ellipse(fill=True)
         self.height = Line()
@@ -272,7 +278,7 @@ def executor(cmd: str) -> Image:
     for layer in range(0, nlayers):
         layer_y = layers[layer]
         stretch=min(1.0-(first-layer_y)/diff+0.3, 1.0)
-        nactors = randint(1, 4)
+        nactors = randint(1, 2)
         group = []
         for _ in range(0,nactors):
             x=randint(0, img_side)
@@ -283,10 +289,35 @@ def executor(cmd: str) -> Image:
         for actor in group:
             rect_union(img_rect, actor.rect)
 
+
     bgcolor = randcolor()
 
     img_w = img_rect.w - img_rect.x
     img_h = img_rect.h - img_rect.y
+
+    sparkles = Picture(atlas_num=0, img_num=sparkles_num)
+    ratio = sparkles.w / sparkles.h
+    sparkles.img.h = int(sparkles.h * 0.45)
+    sparkles.img.w = int(sparkles.img.h * ratio)
+    sparkles.w = sparkles.img.w
+    sparkles.h = sparkles.img.h
+    sparkles.x = img_w - sparkles.w
+    sparkles.y = img_h - sparkles.h
+    A = sparkles.img.getchannel('A')
+    newA = A.point(lambda i: i//2 if i>0 else 0)
+    sparkles.img.putalpha(newA)
+
+    carrot = Picture(atlas_num=0, img_num=carrot_num)
+    ratio = carrot.w / carrot.h
+    carrot.img.h = int(carrot.h * 0.1)
+    carrot.img.w = int(carrot.img.h * ratio)
+    carrot.w = carrot.img.w
+    carrot.h = carrot.img.h
+    carrot.x = sparkles.x + sparkles.w//2
+    carrot.y = sparkles.y + sparkles.h//2 - carrot.h//2
+    A = carrot.img.getchannel('A')
+    newA = A.point(lambda i: i//2 if i>0 else 0)
+    carrot.img.putalpha(newA)
 
     img = Image.new('RGB', (img_w, img_h), color=bgcolor)
     d = ImageDraw.Draw(img)
@@ -300,6 +331,10 @@ def executor(cmd: str) -> Image:
         for actor in group:
             actor.shift(-img_rect.x, -img_rect.y)
             actor.draw(img, d)
+
+    sparkles.draw(img, d)
+    carrot.draw(img, d)
+
     res = img.crop((-img_rect.x, -img_rect.y, -img_rect.x + img_side, -img_rect.y + img_side))
     return res
 
