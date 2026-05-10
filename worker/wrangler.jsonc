@@ -1,0 +1,44 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "worker",
+  "main": "src/index.js",
+  "compatibility_date": "2024-01-01",
+  "observability": {
+    "enabled": true
+  },
+  "placement": {
+    "mode": "smart"
+  },
+  "routes": [
+    {
+      "pattern": "338959.xyz",
+      "zone_name": "338959.xyz",
+      "custom_domain": true
+    },
+    {
+      "pattern": "xn--i77h.338959.xyz",
+      "zone_name": "338959.xyz",
+      "custom_domain": true
+    },
+    {
+      "pattern": "xn--7r8h.338959.xyz",
+      "zone_name": "338959.xyz",
+      "custom_domain": true
+    },
+    {
+      "pattern": "xn--3g9h.338959.xyz",
+      "zone_name": "338959.xyz",
+      "custom_domain": true
+    },
+    {
+      "pattern": "xn--rv9h.338959.xyz",
+      "zone_name": "338959.xyz",
+      "custom_domain": true
+    },
+    {
+      "pattern": "xn--vo8h.338959.xyz",
+      "zone_name": "338959.xyz",
+      "custom_domain": true
+    }
+  ]
+}
