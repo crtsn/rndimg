@@ -39,6 +39,11 @@
       "pattern": "xn--vo8h.338959.xyz",
       "zone_name": "338959.xyz",
       "custom_domain": true
+    },
+    {
+      "pattern": "xn--5k8h.338959.xyz",
+      "zone_name": "338959.xyz",
+      "custom_domain": true
     }
   ]
 }

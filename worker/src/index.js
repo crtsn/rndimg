@@ -22,17 +22,25 @@ export default {
       const id = emojiMatch[1];
       const isAnimated = emojiMatch[3] === 'gif';
       let response = await fetchDiscordEmote(id, isAnimated);
-      
-      // If the specific ID 404s, fall through to the random selection logic
       if (response.status === 200) return response;
     }
 
-    // 3. Deterministic "Random" based on path seed
+    // 3. Filter emotes based on subdomain
+    // xn--5k8h is the punycode for "🔍" or similar specific characters.
+    let availableEmotes = emote_ids;
+    if (host.startsWith("xn--5k8h")) {
+      availableEmotes = emote_ids.filter(e => e.animated === true);
+      
+      // Fallback if the JSON contains no animated emotes to avoid modulo by zero
+      if (availableEmotes.length === 0) availableEmotes = emote_ids;
+    }
+
+    // 4. Deterministic "Random" based on path seed
     const seed = await getSeed(fullPathStr.slice(0, 8));
-    const index = seed % emote_ids.length;
-    const emote = emote_ids[index];
+    const index = seed % availableEmotes.length;
+    const emote = availableEmotes[index];
     
-    return fetchDiscordEmote(emote.id, emote.animated, true);
+    return fetchDiscordEmote(emote.id, emote.animated, true, availableEmotes);
   }
 };
 
@@ -40,8 +48,9 @@ export default {
  * @param {string} id - Discord Emoji ID
  * @param {boolean} animated - Is animated
  * @param {boolean} allowFallback - Should we try a random emote if this one 404s?
+ * @param {Array} pool - The filtered pool to pick from if fallback is needed
  */
-async function fetchDiscordEmote(id, animated, allowFallback = false) {
+async function fetchDiscordEmote(id, animated, allowFallback = false, pool = emote_ids) {
   const format = animated ? "gif" : "webp";
   const discordUrl = `https://cdn.discordapp.com/emojis/${id}.${format}?size=96&animated=${animated}`;
 
@@ -52,14 +61,11 @@ async function fetchDiscordEmote(id, animated, allowFallback = false) {
     }
   });
 
-  // If Discord 404s (or fails) and we are allowed to fallback
   if (!response.ok && allowFallback) {
-    const randomEmote = emote_ids[Math.floor(Math.random() * emote_ids.length)];
-    // Recursive call, but set fallback to false to prevent infinite loops if all IDs are dead
-    return fetchDiscordEmote(randomEmote.id, randomEmote.animated, false);
+    const randomEmote = pool[Math.floor(Math.random() * pool.length)];
+    return fetchDiscordEmote(randomEmote.id, randomEmote.animated, false, pool);
   }
 
-  // Create new response to set custom cache headers
   const newResponse = new Response(response.body, response);
   newResponse.headers.set("Cache-Control", "no-cache, no-store, must-revalidate, public, max-age=0");
   newResponse.headers.set("Pragma", "no-cache");
@@ -74,4 +80,3 @@ async function getSeed(str) {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.slice(0, 4).reduce((acc, byte) => (acc << 8) + byte, 0) >>> 0;
 }
-
