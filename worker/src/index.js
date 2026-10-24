@@ -1,21 +1,19 @@
 import emote_ids from './emote_ids.json';
 import audioAssets from './audio_assets.json';
+import speechWasm from './speech.wasm';
+import createSpeechModule from './speech.js';
 import { ArrayBufferTarget, Muxer } from 'webm-muxer';
-import { dictionary } from 'cmu-pronouncing-dictionary';
 
 const AUDIO_HOSTS = new Set(['xn--dv8h', 'xn--k18h', 'xn--pp8h']);
 const CAMERA_HOST = 'xn--5k8h';
 const MAX_AUDIO_CHARACTERS = 24;
 const FALLBACK_AUDIO_TEXT = 'i am a carrot';
+const ESPEAK_VOICE = 'en-us+klatt';
+const PRONUNCIATION_OVERRIDES = { urmom: 'your mom' };
 const DIGIT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
 const TEEN_WORDS = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
 const TENS_WORDS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
-const decodedSounds = new Map();
 const carrotFrame = decodeBase64(audioAssets.video);
-const graphemeTokens = Object.keys(audioAssets.audio)
-  .filter(token => token.length > 1 && !token.startsWith('@') && !token.startsWith('#'))
-  .sort((left, right) => right.length - left.length);
-const wordSoundKeys = new Set(Object.keys(audioAssets.audio).filter(token => token.startsWith('@')));
 const animatedEmotes = emote_ids.filter(emote => emote.animated);
 const opusDecoderConfig = {
   decoderConfig: {
@@ -30,6 +28,32 @@ const opusDecoderConfig = {
   }
 };
 
+let speechPromise = null;
+
+function getSpeechModule() {
+  if (!speechPromise) {
+    speechPromise = createSpeechModule({
+      instantiateWasm(imports, receiveInstance) {
+        const instance = new WebAssembly.Instance(speechWasm, imports);
+        receiveInstance(instance, speechWasm);
+        return {};
+      }
+    }).then(speech => {
+      if (speech._sp_init() < 0) {
+        throw new Error('speech wasm init failed');
+      }
+      if (speech.ccall('sp_set_voice', 'number', ['string'], [ESPEAK_VOICE]) !== 0) {
+        speech.ccall('sp_set_voice', 'number', ['string'], ['en']);
+      }
+      return speech;
+    }).catch(error => {
+      speechPromise = null;
+      throw error;
+    });
+  }
+  return speechPromise;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -38,13 +62,13 @@ export default {
     const search = url.search;
     const fullPathStr = path + search;
 
-    // 1. Letter-by-letter audio subdomain
+    // 1. Speech synthesis subdomain
     if (host.split('.').some(label => AUDIO_HOSTS.has(label))) {
       if (url.protocol === 'http:') {
         url.protocol = 'https:';
         return Response.redirect(url.toString(), 302);
       }
-      return serveLetterVideo(request, url, path, ctx);
+      return serveSpeechVideo(request, url, path, ctx);
     }
 
     // 2. Root redirect
@@ -70,12 +94,12 @@ export default {
     const seed = await getSeed(fullPathStr.slice(0, 8));
     const index = seed % availableEmotes.length;
     const emote = availableEmotes[index];
-    
+
     return fetchDiscordEmote(emote.id, emote.animated, true, availableEmotes);
   }
 };
 
-async function serveLetterVideo(request, url, path, ctx) {
+async function serveSpeechVideo(request, url, path, ctx) {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return new Response('Method not allowed', {
       status: 405,
@@ -98,13 +122,18 @@ async function serveLetterVideo(request, url, path, ctx) {
       .map(character => /[a-z0-9]/i.test(character) ? character.toLowerCase() : ' ')
       .join('');
 
-  const cacheKey = new Request(`${url.origin}/${encodeURIComponent(text)}.webm?audio-version=13`);
+  const cacheKey = new Request(`${url.origin}/${encodeURIComponent(text)}.webm?audio-version=14`);
   const cached = await caches.default.match(cacheKey);
   if (cached) {
     return respondWithVideo(request, await cached.arrayBuffer(), cached.headers);
   }
 
-  const buffer = buildLetterVideo(text);
+  const speechText = buildSpeechText(text);
+  const buffer = await buildSpeechVideo(await getSpeechModule(), speechText);
+  if (!buffer) {
+    return new Response('speech synthesis failed', { status: 500 });
+  }
+
   const headers = new Headers({
     'Accept-Ranges': 'bytes',
     'Cache-Control': 'public, max-age=300',
@@ -119,7 +148,63 @@ async function serveLetterVideo(request, url, path, ctx) {
   return respondWithVideo(request, buffer, headers);
 }
 
-function buildLetterVideo(text) {
+function buildSpeechText(text) {
+  return text
+    .split(' ')
+    .map(part => {
+      if (part === '') return null;
+      if (/^\d+$/.test(part)) return numberToWords(part).join(' ');
+      return PRONUNCIATION_OVERRIDES[part] ?? part;
+    })
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim() || FALLBACK_AUDIO_TEXT;
+}
+
+function numberToWords(digits) {
+  const words = [];
+  let index = 0;
+
+  if (digits.length % 2 === 1) {
+    words.push(DIGIT_WORDS[Number(digits[0])]);
+    index = 1;
+  }
+
+  for (; index < digits.length; index += 2) {
+    const first = Number(digits[index]);
+    const second = Number(digits[index + 1]);
+    if (first === 0) {
+      words.push('zero', DIGIT_WORDS[second]);
+    } else if (first === 1) {
+      words.push(TEEN_WORDS[second]);
+    } else {
+      words.push(TENS_WORDS[first]);
+      if (second !== 0) words.push(DIGIT_WORDS[second]);
+    }
+  }
+
+  return words;
+}
+
+async function buildSpeechVideo(speech, text) {
+  let packetCount = speech.ccall('sp_synth', 'number', ['string'], [text]);
+  if (packetCount <= 0 && text !== FALLBACK_AUDIO_TEXT) {
+    packetCount = speech.ccall('sp_synth', 'number', ['string'], [FALLBACK_AUDIO_TEXT]);
+  }
+  if (packetCount <= 0) return null;
+
+  const packetBytes = speech._sp_packet_bytes();
+  const dataAddress = speech._sp_packet_data();
+  const sizesAddress = speech._sp_packet_sizes();
+  const packets = [];
+  const sizes = new Int32Array(speech.HEAP32.buffer, sizesAddress, packetCount);
+  let offset = 0;
+  for (let index = 0; index < packetCount; index++) {
+    packets.push(new Uint8Array(speech.HEAPU8.buffer, dataAddress + offset, sizes[index]).slice());
+    offset += sizes[index];
+  }
+
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
     video: {
@@ -136,13 +221,9 @@ function buildLetterVideo(text) {
   });
 
   let timestamp = 0;
-  let firstAudioPacket = true;
-  for (const token of tokenizeSpeech(text)) {
-    for (const packet of getSoundPackets(token)) {
-      muxer.addAudioChunkRaw(packet, 'key', timestamp, firstAudioPacket ? opusDecoderConfig : undefined);
-      firstAudioPacket = false;
-      timestamp += 20000;
-    }
+  for (let index = 0; index < packets.length; index++) {
+    muxer.addAudioChunkRaw(packets[index], 'key', timestamp, index === 0 ? opusDecoderConfig : undefined);
+    timestamp += 20000;
   }
 
   const frameDuration = 200000;
@@ -152,89 +233,6 @@ function buildLetterVideo(text) {
   muxer.addVideoChunkRaw(carrotFrame, 'key', timestamp);
   muxer.finalize();
   return muxer.target.buffer;
-}
-
-function tokenizeSpeech(text) {
-  const tokens = [];
-
-  for (const part of text.split(/( +)/)) {
-    if (part === '') continue;
-
-    if (part[0] === ' ') {
-      tokens.push(...part);
-      continue;
-    }
-
-    const wordKey = `@${part}`;
-    if (wordSoundKeys.has(wordKey)) {
-      tokens.push(wordKey);
-      continue;
-    }
-
-    const pronunciation = dictionary[part];
-    if (pronunciation) {
-      const phonemes = pronunciation.split(' # ')[0].split(' ');
-      tokens.push(...phonemes.map(phoneme => `#${phoneme.replace(/\d/g, '')}`));
-      continue;
-    }
-
-    for (let index = 0; index < part.length;) {
-      if (/\d/.test(part[index])) {
-        const digits = part.slice(index).match(/^\d+/)[0];
-        tokens.push(...tokenizeNumber(digits));
-        index += digits.length;
-        continue;
-      }
-
-      const grapheme = graphemeTokens.find(token => part.startsWith(token, index));
-      const token = grapheme || part[index];
-      tokens.push(token);
-      index += token.length;
-    }
-  }
-
-  return tokens;
-}
-
-function tokenizeNumber(digits) {
-  const tokens = [];
-  let index = 0;
-
-  if (digits.length % 2 === 1) {
-    tokens.push(`@${DIGIT_WORDS[Number(digits[0])]}`);
-    index = 1;
-  }
-
-  for (; index < digits.length; index += 2) {
-    const first = Number(digits[index]);
-    const second = Number(digits[index + 1]);
-    if (first === 0) {
-      tokens.push('@zero', `@${DIGIT_WORDS[second]}`);
-    } else if (first === 1) {
-      tokens.push(`@${TEEN_WORDS[second]}`);
-    } else {
-      tokens.push(`@${TENS_WORDS[first]}`);
-      if (second !== 0) tokens.push(`@${DIGIT_WORDS[second]}`);
-    }
-  }
-
-  return tokens.flatMap((token, index) => index === tokens.length - 1 ? [token] : [token, ' ']);
-}
-
-function getSoundPackets(token) {
-  let packets = decodedSounds.get(token);
-  if (packets) return packets;
-
-  const sound = audioAssets.audio[token];
-  const data = decodeBase64(sound.data);
-  let offset = 0;
-  packets = sound.sizes.map(size => {
-    const packet = data.subarray(offset, offset + size);
-    offset += size;
-    return packet;
-  });
-  decodedSounds.set(token, packets);
-  return packets;
 }
 
 function decodeBase64(value) {
