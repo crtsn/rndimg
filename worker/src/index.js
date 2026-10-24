@@ -13,6 +13,11 @@ export default {
       return Response.redirect('https://dl6.webmfiles.org/big-buck-bunny_trailer.webm', 302);
     }
 
+    // 2. Mouth subdomain redirect
+    if (host.split('.').includes('xn--pp8h')) {
+      return Response.redirect('https://dl6.webmfiles.org/big-buck-bunny_trailer.webm', 302);
+    }
+
     // 2. Root redirect
     if (path === "") {
       const randomString = Array.from({ length: 16 }, () =>
