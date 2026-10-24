@@ -9,5 +9,9 @@
   },
   "devDependencies": {
     "wrangler": "^4.90.0"
+  },
+  "dependencies": {
+    "cmu-pronouncing-dictionary": "^3.0.0",
+    "webm-muxer": "^5.1.4"
   }
 }
