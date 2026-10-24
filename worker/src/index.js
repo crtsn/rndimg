@@ -8,7 +8,8 @@ const AUDIO_HOSTS = new Set(['xn--dv8h', 'xn--k18h', 'xn--pp8h']);
 const CAMERA_HOST = 'xn--5k8h';
 const MAX_AUDIO_CHARACTERS = 24;
 const FALLBACK_AUDIO_TEXT = 'i am a carrot';
-const ESPEAK_VOICE = 'en-us+klatt';
+const ESPEAK_VOICE = 'en-us+belinda';
+const ESPEAK_VOICE_FALLBACKS = ['en-us+f3', 'en'];
 const PRONUNCIATION_OVERRIDES = { urmom: 'your mom' };
 const DIGIT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
 const TEEN_WORDS = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
@@ -42,8 +43,8 @@ function getSpeechModule() {
       if (speech._sp_init() < 0) {
         throw new Error('speech wasm init failed');
       }
-      if (speech.ccall('sp_set_voice', 'number', ['string'], [ESPEAK_VOICE]) !== 0) {
-        speech.ccall('sp_set_voice', 'number', ['string'], ['en']);
+      for (const voice of [ESPEAK_VOICE, ...ESPEAK_VOICE_FALLBACKS]) {
+        if (speech.ccall('sp_set_voice', 'number', ['string'], [voice]) === 0) break;
       }
       return speech;
     }).catch(error => {
@@ -122,7 +123,7 @@ async function serveSpeechVideo(request, url, path, ctx) {
       .map(character => /[a-z0-9]/i.test(character) ? character.toLowerCase() : ' ')
       .join('');
 
-  const cacheKey = new Request(`${url.origin}/${encodeURIComponent(text)}.webm?audio-version=14`);
+  const cacheKey = new Request(`${url.origin}/${encodeURIComponent(text)}.webm?audio-version=15`);
   const cached = await caches.default.match(cacheKey);
   if (cached) {
     return respondWithVideo(request, await cached.arrayBuffer(), cached.headers);
