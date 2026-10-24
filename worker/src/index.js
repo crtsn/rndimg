@@ -8,7 +8,12 @@ export default {
     const search = url.search;
     const fullPathStr = path + search;
 
-    // 1. Root redirect
+    // 1. Camera subdomain redirect
+    if (host.split('.').includes('xn--5k8h')) {
+      return Response.redirect('https://dl6.webmfiles.org/big-buck-bunny_trailer.webm', 302);
+    }
+
+    // 2. Root redirect
     if (path === "") {
       const randomString = Array.from({ length: 16 }, () =>
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random() * 36)]
@@ -16,7 +21,7 @@ export default {
       return Response.redirect(`${url.protocol}//${host}/${randomString}`, 302);
     }
 
-    // 2. Try specific emoji ID if path matches /emojis/123...
+    // 3. Try specific emoji ID if path matches /emojis/123...
     const emojiMatch = path.match(/^emojis\/(\d+)(\.(png|gif|webp))?$/);
     if (emojiMatch) {
       const id = emojiMatch[1];
@@ -25,15 +30,7 @@ export default {
       if (response.status === 200) return response;
     }
 
-    // 3. Filter emotes based on subdomain
-    // xn--5k8h is the punycode for "🔍" or similar specific characters.
-    let availableEmotes = emote_ids;
-    if (host.startsWith("xn--5k8h")) {
-      availableEmotes = emote_ids.filter(e => e.animated === true);
-      
-      // Fallback if the JSON contains no animated emotes to avoid modulo by zero
-      if (availableEmotes.length === 0) availableEmotes = emote_ids;
-    }
+    const availableEmotes = emote_ids;
 
     // 4. Deterministic "Random" based on path seed
     const seed = await getSeed(fullPathStr.slice(0, 8));
