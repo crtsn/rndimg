@@ -139,7 +139,6 @@ async function serveSpeechVideo(request, url, path, ctx) {
   if (!buffer) {
     const speechText = buildSpeechText(text);
     buffer = await buildSpeechVideo(await getSpeechModule(), speechText);
-    console.log(`synth ${speechText.length} chars -> ${buffer ? buffer.byteLength : 0} bytes (uncached)`);
     if (!buffer) {
       return new Response('speech synthesis failed', { status: 500 });
     }
