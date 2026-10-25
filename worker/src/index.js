@@ -7,6 +7,9 @@ import { ArrayBufferTarget, Muxer } from 'webm-muxer';
 const AUDIO_HOSTS = new Set(['xn--dv8h', 'xn--k18h', 'xn--pp8h']);
 const CAMERA_HOST = 'xn--5k8h';
 const MAX_AUDIO_CHARACTERS = 24;
+const MAX_MEMOIZED_VIDEOS = 64;
+const AUDIO_PACKET_MICROSECONDS = 40000;
+const EDGE_CACHE_CONTROL = 'public, max-age=2592000';
 const FALLBACK_AUDIO_TEXT = 'i am a carrot';
 const ESPEAK_VOICE = 'en-us+belinda';
 const ESPEAK_VOICE_FALLBACKS = ['en-us+f3', 'en'];
@@ -30,6 +33,7 @@ const opusDecoderConfig = {
 };
 
 let speechPromise = null;
+const videoMemo = new Map();
 
 function getSpeechModule() {
   if (!speechPromise) {
@@ -123,16 +127,26 @@ async function serveSpeechVideo(request, url, path, ctx) {
       .map(character => /[a-z0-9]/i.test(character) ? character.toLowerCase() : ' ')
       .join('');
 
-  const cacheKey = new Request(`${url.origin}/${encodeURIComponent(text)}.webm?audio-version=15`);
+  const cacheKey = new Request(`${url.origin}/${encodeURIComponent(text)}.webm?audio-version=16`);
   const cached = await caches.default.match(cacheKey);
   if (cached) {
-    return respondWithVideo(request, await cached.arrayBuffer(), cached.headers);
+    const headers = new Headers(cached.headers);
+    headers.set('Cache-Control', 'public, max-age=300');
+    return respondWithVideo(request, await cached.arrayBuffer(), headers);
   }
 
-  const speechText = buildSpeechText(text);
-  const buffer = await buildSpeechVideo(await getSpeechModule(), speechText);
+  let buffer = videoMemo.get(text);
   if (!buffer) {
-    return new Response('speech synthesis failed', { status: 500 });
+    const speechText = buildSpeechText(text);
+    buffer = await buildSpeechVideo(await getSpeechModule(), speechText);
+    console.log(`synth ${speechText.length} chars -> ${buffer ? buffer.byteLength : 0} bytes (uncached)`);
+    if (!buffer) {
+      return new Response('speech synthesis failed', { status: 500 });
+    }
+    if (videoMemo.size >= MAX_MEMOIZED_VIDEOS) {
+      videoMemo.delete(videoMemo.keys().next().value);
+    }
+    videoMemo.set(text, buffer);
   }
 
   const headers = new Headers({
@@ -144,8 +158,9 @@ async function serveSpeechVideo(request, url, path, ctx) {
     'X-Content-Type-Options': 'nosniff'
   });
 
-  const response = new Response(buffer, { headers });
-  ctx.waitUntil(caches.default.put(cacheKey, response.clone()));
+  const edgeHeaders = new Headers(headers);
+  edgeHeaders.set('Cache-Control', EDGE_CACHE_CONTROL);
+  ctx.waitUntil(caches.default.put(cacheKey, new Response(buffer, { headers: edgeHeaders })));
   return respondWithVideo(request, buffer, headers);
 }
 
@@ -224,7 +239,7 @@ async function buildSpeechVideo(speech, text) {
   let timestamp = 0;
   for (let index = 0; index < packets.length; index++) {
     muxer.addAudioChunkRaw(packets[index], 'key', timestamp, index === 0 ? opusDecoderConfig : undefined);
-    timestamp += 20000;
+    timestamp += AUDIO_PACKET_MICROSECONDS;
   }
 
   const frameDuration = 200000;

@@ -8,7 +8,7 @@
 #include <opus.h>
 
 #define OUT_RATE 48000
-#define FRAME_SIZE 960
+#define FRAME_SIZE 1920
 
 static uint8_t *pcm = NULL;
 static size_t pcm_len = 0, pcm_cap = 0;
@@ -71,6 +71,8 @@ int sp_init(void)
 	if (err != OPUS_OK || enc == NULL)
 		return -2;
 	opus_encoder_ctl(enc, OPUS_SET_BITRATE(24000));
+	opus_encoder_ctl(enc, OPUS_SET_COMPLEXITY(2));
+	opus_encoder_ctl(enc, OPUS_SET_SIGNAL(OPUS_SIGNAL_VOICE));
 	return sr;
 }
 
